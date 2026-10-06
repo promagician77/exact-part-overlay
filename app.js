@@ -53,7 +53,7 @@
 
   // ---------- results ----------
   var results = null;
-  fetch('results.json').then(function (r) { return r.json(); }).then(function (r) {
+  var ready = fetch('results.json', { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('results.json ' + r.status); return r.json(); }).then(function (r) {
     results = r; var v = r.vae;
     $('vaestats').innerHTML = [
       [v.part_changed_pct + '%', 'of the part\'s pixels changed'],
@@ -70,25 +70,46 @@
       var sh = m.files[f] ? m.files[f].shape : [m.canvas[1], m.canvas[0], 3];
       return '<li><a href="layers/' + f + '" download>' + esc(names[f] || f) + '</a><span>' + sh[1] + ' x ' + sh[0] + '</span></li>';
     }).join('') + '<li><a href="layers/manifest.json" download>manifest.json</a><span>offsets, order, hashes</span></li>';
+    return r;
   });
 
   // ---------- layers viewer ----------
-  var started = false, imgs = {}, data = {}, vis = { bg: true, shadow: true, part: true };
-  function load(src) { return new Promise(function (ok, bad) { var i = new Image(); i.onload = function () { ok(i); }; i.onerror = bad; i.src = src; }); }
-  function pixels(img) {
-    var c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
-    var x = c.getContext('2d'); x.drawImage(img, 0, 0); return { w: c.width, d: x.getImageData(0, 0, c.width, c.height).data };
-  }
-  function initLayers() {
-    if (started) return; started = true;
-    Promise.all(['05_background', '04_shadow', '01_part', '06_composite', '03_mask_edges'].map(function (n) { return load('layers/' + n + '.png'); })
-      .concat([load('img/part_photo.png')])).then(function (a) {
-      imgs = { bg: a[0], shadow: a[1], part: a[2], comp: a[3], edge: a[4], photo: a[5] };
-      data = { comp: pixels(a[3]), photo: pixels(a[5]), edge: pixels(a[4]) };
-      draw();
+  var state = 'idle', imgs = {}, data = {}, vis = { bg: true, shadow: true, part: true };
+  function load(src) {
+    return new Promise(function (ok, bad) {
+      var i = new Image(); i.decoding = 'async';
+      i.onload = function () { ok(i); }; i.onerror = function () { bad(new Error('Could not load ' + src)); }; i.src = src;
     });
   }
+  function pixels(img) {
+    var c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+    var x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0);
+    return { w: c.width, d: x.getImageData(0, 0, c.width, c.height).data };
+  }
+  function status(msg, retry) {
+    var el = $('stagemsg');
+    if (!msg) { el.hidden = true; return; }
+    el.hidden = false;
+    el.innerHTML = '<span>' + esc(msg) + '</span>' + (retry ? '<button type="button" id="retry">Try again</button>' : '');
+    if (retry) $('retry').onclick = function () { state = 'idle'; initLayers(); };
+  }
+  function initLayers() {
+    if (state === 'loading' || state === 'done') return;
+    state = 'loading'; status('Loading layers...');
+    Promise.all([ready, load('layers/05_background.png'), load('layers/04_shadow.png'), load('layers/01_part.png')])
+      .then(function (a) {
+        imgs.bg = a[1]; imgs.shadow = a[2]; imgs.part = a[3];
+        draw(); status('Loading pixel data for the magnifier...');
+        return Promise.all([load('layers/06_composite.png'), load('layers/03_mask_edges.png'), load('img/part_photo.png')]);
+      })
+      .then(function (a) {
+        data = { comp: pixels(a[0]), edge: pixels(a[1]), photo: pixels(a[2]) };
+        state = 'done'; status('');
+      })
+      .catch(function (e) { state = 'idle'; status(e.message + '. Check your connection.', true); });
+  }
   function draw() {
+    if (!results || !imgs.bg) return;
     var c = $('cv'), x = c.getContext('2d'), m = results.manifest;
     x.clearRect(0, 0, c.width, c.height);
     if (vis.bg) x.drawImage(imgs.bg, 0, 0);
@@ -100,7 +121,7 @@
   });
   function rgbAt(p, x, y) { var k = (y * p.w + x) * 4; return [p.d[k], p.d[k + 1], p.d[k + 2], p.d[k + 3]]; }
   $('cv').addEventListener('mousemove', function (e) {
-    if (!data.comp || !results) return;
+    if (!results || !imgs.bg) return;
     var c = $('cv'), r = c.getBoundingClientRect(), m = results.manifest;
     var x = Math.floor((e.clientX - r.left) / r.width * c.width), y = Math.floor((e.clientY - r.top) / r.height * c.height);
     var L = $('loupe'), lx = L.getContext('2d'); L.hidden = false;
@@ -110,6 +131,7 @@
     lx.drawImage(c, x - 7, y - 7, 15, 15, 0, 0, 150, 150);
     lx.strokeStyle = '#fff'; lx.lineWidth = 2; lx.strokeRect(70, 70, 10, 10);
     var ox = x - m.part_offset[0], oy = y - m.part_offset[1], inPart = ox >= 0 && oy >= 0 && ox < m.part_size[0] && oy < m.part_size[1];
+    if (!data.comp) { $('pix').innerHTML = '<p>Pixel data is still loading...</p>'; return; }
     var comp = rgbAt(data.comp, x, y), html = '';
     if (inPart) {
       var a = rgbAt(data.edge, ox, oy)[0];
