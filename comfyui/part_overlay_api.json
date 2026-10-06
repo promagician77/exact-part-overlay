@@ -1,0 +1,305 @@
+{
+ "1": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "part_photo.png"
+  },
+  "_meta": {
+   "title": "Part photo (original pixels)"
+  }
+ },
+ "2": {
+  "class_type": "LoadImageMask",
+  "inputs": {
+   "image": "segmentation_alpha.png",
+   "channel": "red"
+  },
+  "_meta": {
+   "title": "Part mask (swap for SAM2 / BiRefNet)"
+  }
+ },
+ "3": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "target.png"
+  },
+  "_meta": {
+   "title": "Target image"
+  }
+ },
+ "4": {
+  "class_type": "ImageCompositeMasked",
+  "inputs": {
+   "destination": [
+    "3",
+    0
+   ],
+   "source": [
+    "1",
+    0
+   ],
+   "x": 80,
+   "y": 40,
+   "resize_source": false,
+   "mask": [
+    "2",
+    0
+   ]
+  },
+  "_meta": {
+   "title": "Rough placement (guide only)"
+  }
+ },
+ "5": {
+  "class_type": "SolidMask",
+  "inputs": {
+   "value": 0.0,
+   "width": 1400,
+   "height": 1000
+  },
+  "_meta": {
+   "title": "Empty canvas mask"
+  }
+ },
+ "6": {
+  "class_type": "MaskComposite",
+  "inputs": {
+   "destination": [
+    "5",
+    0
+   ],
+   "source": [
+    "2",
+    0
+   ],
+   "x": 80,
+   "y": 40,
+   "operation": "add"
+  },
+  "_meta": {
+   "title": "Part mask in target coordinates"
+  }
+ },
+ "7": {
+  "class_type": "InvertMask",
+  "inputs": {
+   "mask": [
+    "6",
+    0
+   ]
+  },
+  "_meta": {
+   "title": "Scene mask (everything except the part)"
+  }
+ },
+ "8": {
+  "class_type": "GrowMask",
+  "inputs": {
+   "mask": [
+    "7",
+    0
+   ],
+   "expand": -4,
+   "tapered_corners": true
+  },
+  "_meta": {
+   "title": "Keep the sampler off the part edge"
+  }
+ },
+ "9": {
+  "class_type": "CheckpointLoaderSimple",
+  "inputs": {
+   "ckpt_name": "v1-5-pruned-emaonly.safetensors"
+  }
+ },
+ "10": {
+  "class_type": "CLIPTextEncode",
+  "inputs": {
+   "text": "industrial part on a steel fixture plate, soft studio light, realistic contact shadow, photo",
+   "clip": [
+    "9",
+    1
+   ]
+  }
+ },
+ "11": {
+  "class_type": "CLIPTextEncode",
+  "inputs": {
+   "text": "text, extra parts, warped metal, blur, cartoon",
+   "clip": [
+    "9",
+    1
+   ]
+  }
+ },
+ "12": {
+  "class_type": "Canny",
+  "inputs": {
+   "image": [
+    "4",
+    0
+   ],
+   "low_threshold": 0.2,
+   "high_threshold": 0.6
+  },
+  "_meta": {
+   "title": "Edges keep scene geometry"
+  }
+ },
+ "13": {
+  "class_type": "ControlNetLoader",
+  "inputs": {
+   "control_net_name": "control_v11p_sd15_canny.pth"
+  }
+ },
+ "14": {
+  "class_type": "ControlNetApplyAdvanced",
+  "inputs": {
+   "positive": [
+    "10",
+    0
+   ],
+   "negative": [
+    "11",
+    0
+   ],
+   "control_net": [
+    "13",
+    0
+   ],
+   "image": [
+    "12",
+    0
+   ],
+   "strength": 0.7,
+   "start_percent": 0.0,
+   "end_percent": 0.8
+  }
+ },
+ "15": {
+  "class_type": "VAEEncodeForInpaint",
+  "inputs": {
+   "pixels": [
+    "4",
+    0
+   ],
+   "vae": [
+    "9",
+    2
+   ],
+   "mask": [
+    "8",
+    0
+   ],
+   "grow_mask_by": 6
+  }
+ },
+ "16": {
+  "class_type": "KSampler",
+  "inputs": {
+   "model": [
+    "9",
+    0
+   ],
+   "seed": 42,
+   "steps": 28,
+   "cfg": 6.5,
+   "sampler_name": "dpmpp_2m",
+   "scheduler": "karras",
+   "positive": [
+    "14",
+    0
+   ],
+   "negative": [
+    "14",
+    1
+   ],
+   "latent_image": [
+    "15",
+    0
+   ],
+   "denoise": 1.0
+  },
+  "_meta": {
+   "title": "Generates the scene only"
+  }
+ },
+ "17": {
+  "class_type": "VAEDecode",
+  "inputs": {
+   "samples": [
+    "16",
+    0
+   ],
+   "vae": [
+    "9",
+    2
+   ]
+  },
+  "_meta": {
+   "title": "Scene (part pixels here are altered)"
+  }
+ },
+ "18": {
+  "class_type": "ImageCompositeMasked",
+  "inputs": {
+   "destination": [
+    "17",
+    0
+   ],
+   "source": [
+    "1",
+    0
+   ],
+   "x": 80,
+   "y": 40,
+   "resize_source": false,
+   "mask": [
+    "2",
+    0
+   ]
+  },
+  "_meta": {
+   "title": "Paste ORIGINAL part pixels back"
+  }
+ },
+ "19": {
+  "class_type": "SaveImage",
+  "inputs": {
+   "images": [
+    "18",
+    0
+   ],
+   "filename_prefix": "part_overlay/06_composite"
+  }
+ },
+ "20": {
+  "class_type": "SaveImage",
+  "inputs": {
+   "images": [
+    "17",
+    0
+   ],
+   "filename_prefix": "part_overlay/05_scene"
+  }
+ },
+ "21": {
+  "class_type": "MaskToImage",
+  "inputs": {
+   "mask": [
+    "6",
+    0
+   ]
+  }
+ },
+ "22": {
+  "class_type": "SaveImage",
+  "inputs": {
+   "images": [
+    "21",
+    0
+   ],
+   "filename_prefix": "part_overlay/02_mask"
+  }
+ }
+}

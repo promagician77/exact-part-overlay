@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="robots" content="noindex, nofollow">
+<title>Exact part overlay - technical draft</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%231C1E21'/><circle cx='32' cy='32' r='20' fill='none' stroke='%23fff' stroke-width='5'/><circle cx='32' cy='32' r='7' fill='%23fff'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap hrow">
+    <div><h1>Exact part overlay</h1><p>Technical draft for your ComfyUI post, by Sebastian. Everything here was run, not mocked.</p></div>
+  </div>
+  <nav class="wrap tabs" role="tablist" aria-label="Sections">
+    <button role="tab" aria-selected="true" data-t="catch">The catch</button>
+    <button role="tab" aria-selected="false" data-t="pipe">Pipeline</button>
+    <button role="tab" aria-selected="false" data-t="layers">Layers</button>
+    <button role="tab" aria-selected="false" data-t="checks">Checks</button>
+    <button role="tab" aria-selected="false" data-t="plan">Delivery</button>
+  </nav>
+</header>
+
+<main class="wrap">
+<!-- THE CATCH -->
+<section id="catch" class="panel">
+  <div class="catch">
+    <div class="wipewrap">
+      <div class="wipehead">
+        <h2>One trip through Stable Diffusion's autoencoder</h2>
+        <div class="seg" role="radiogroup" aria-label="Region">
+          <button role="radio" aria-checked="true" data-r="serial">Serial number</button>
+          <button role="radio" aria-checked="false" data-r="knurl">Knurled ring</button>
+          <button role="radio" aria-checked="false" data-r="hole">Bolt hole edge</button>
+        </div>
+      </div>
+      <div class="wipe" id="wipe">
+        <img id="w-after" alt="Region after one autoencoder round trip">
+        <div class="wipe-top" id="wipe-top"><img id="w-before" alt="Original region"></div>
+        <div class="handle" id="handle" role="slider" tabindex="0" aria-label="Compare original and round trip" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"></div>
+        <span class="tag l">Original photo</span><span class="tag r">After the round trip</span>
+      </div>
+      <label class="diffsw"><input type="checkbox" id="diffsw"> Show the difference map (brighter means more changed)</label>
+    </div>
+    <aside class="facts">
+      <p class="lead">No prompt, no sampling. Just encode and decode, which every diffusion step in ComfyUI does.</p>
+      <dl id="vaestats"></dl>
+      <p class="fine">Measured with TAESD, the compact Stable Diffusion autoencoder, using its official weights. The full SD autoencoder keeps more detail, but it still changes pixels. No diffusion path is pixel-exact.</p>
+      <p class="so">So the part never goes through the model.</p>
+    </aside>
+  </div>
+</section>
+
+<!-- PIPELINE -->
+<section id="pipe" class="panel" hidden>
+  <h2>Two paths that meet only at the end</h2>
+  <p class="sub">ControlNet regenerates the scene around the part. The part's own pixels take a separate path and are pasted back last, at an exact integer offset.</p>
+  <div class="graph">
+    <svg viewBox="0 0 1100 330" role="img" aria-label="Pipeline diagram">
+      <defs>
+        <marker id="ar" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0 0L8 3L0 6" fill="#8A8F96"/></marker>
+        <marker id="arA" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0 0L8 3L0 6" fill="#2550B0"/></marker>
+      </defs>
+      <text x="20" y="34" class="lane a">Part pixels</text>
+      <text x="20" y="214" class="lane">Scene</text>
+      <g class="n a"><rect x="20" y="48" width="150" height="56"/><text x="95" y="72">Load part photo</text><text x="95" y="90" class="s">original pixels</text></g>
+      <g class="n a"><rect x="210" y="48" width="160" height="56"/><text x="290" y="72">Segment the part</text><text x="290" y="90" class="s">SAM2 or BiRefNet</text></g>
+      <g class="n a"><rect x="410" y="48" width="160" height="56"/><text x="490" y="72">Split into layers</text><text x="490" y="90" class="s">part, masks, edges</text></g>
+      <g class="n a hl"><rect x="740" y="48" width="170" height="56"/><text x="825" y="72">Paste original pixels</text><text x="825" y="90" class="s">exact x, y, no resize</text></g>
+      <g class="n a"><rect x="950" y="48" width="130" height="56"/><text x="1015" y="72">Save layers</text><text x="1015" y="90" class="s">+ manifest, checks</text></g>
+      <g class="n"><rect x="20" y="228" width="150" height="56"/><text x="95" y="252">Load target image</text><text x="95" y="270" class="s">the other image</text></g>
+      <g class="n"><rect x="210" y="228" width="160" height="56"/><text x="290" y="252">Rough placement</text><text x="290" y="270" class="s">guide for edges only</text></g>
+      <g class="n"><rect x="410" y="228" width="160" height="56"/><text x="490" y="252">ControlNet (Canny)</text><text x="490" y="270" class="s">keeps scene geometry</text></g>
+      <g class="n"><rect x="610" y="228" width="170" height="56"/><text x="695" y="252">Inpaint scene only</text><text x="695" y="270" class="s">part masked out</text></g>
+      <line x1="170" y1="76" x2="208" y2="76" class="e a"/><line x1="370" y1="76" x2="408" y2="76" class="e a"/>
+      <line x1="570" y1="76" x2="738" y2="76" class="e a"/><line x1="910" y1="76" x2="948" y2="76" class="e a"/>
+      <line x1="170" y1="256" x2="208" y2="256" class="e"/><line x1="370" y1="256" x2="408" y2="256" class="e"/><line x1="570" y1="256" x2="608" y2="256" class="e"/>
+      <path d="M780 256 H825 V106" class="e" fill="none"/>
+      <path d="M490 104 V160 H290 V226" class="e d" fill="none"/>
+      <text x="300" y="152" class="s l">mask positions the part</text>
+      <text x="835" y="180" class="s l">scene arrives here,</text><text x="835" y="196" class="s l">part pixels replace its center</text>
+    </svg>
+  </div>
+  <div class="row3">
+    <div class="note"><h3>Real ComfyUI workflow</h3><p>22 core nodes, opens on a stock install. The last composite node takes its pixels from the original photo, not from the sampler.</p><a class="btn" href="/comfyui/part_overlay_api.json" download>Download the workflow</a></div>
+    <div class="note"><h3>Semi-autonomous by default</h3><p>Batch a folder of parts. Anything with a low-confidence mask or a failed check stops for a quick human look instead of shipping.</p></div>
+    <div class="note"><h3>The code behind this page</h3><p><a href="/src/pipeline.py">pipeline.py</a> for layers and checks, <a href="/src/measure_vae.py">measure_vae.py</a> for the round trip, <a href="/src/taesd_onnx.py">taesd_onnx.py</a> for the autoencoder.</p></div>
+  </div>
+</section>
+
+<!-- LAYERS -->
+<section id="layers" class="panel" hidden>
+  <div class="lay">
+    <div class="viewer">
+      <div class="vhead">
+        <div class="toggles" role="group" aria-label="Visible layers">
+          <label><input type="checkbox" data-l="bg" checked> Background</label>
+          <label><input type="checkbox" data-l="shadow" checked> Shadow</label>
+          <label><input type="checkbox" data-l="part" checked> Part</label>
+        </div>
+        <span class="hint">Hover the part to compare pixels with the original photo</span>
+      </div>
+      <div class="stage"><canvas id="cv" width="1400" height="1000" aria-label="Layer composite"></canvas><canvas class="loupe" id="loupe" width="150" height="150" hidden></canvas></div>
+    </div>
+    <aside class="files">
+      <h3>Exported files</h3>
+      <ul id="filelist"></ul>
+      <div class="pix" id="pix"><p>Move over the part to read exact pixel values.</p></div>
+    </aside>
+  </div>
+</section>
+
+<!-- CHECKS -->
+<section id="checks" class="panel" hidden>
+  <h2>What the pipeline checks on every image</h2>
+  <p class="sub">These ran on the test part above. The same checks gate each image in a batch.</p>
+  <div class="tw"><table class="ck" id="cktable"><thead><tr><th>Check</th><th>Result</th><th>Measured</th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<!-- DELIVERY -->
+<section id="plan" class="panel" hidden>
+  <div class="row2">
+    <div>
+      <h2>Six working days</h2>
+      <ol class="days">
+        <li><b>Days 1-2</b><span>Your part photos in. Segmentation tuned until masks are clean on your real parts.</span></li>
+        <li><b>Days 3-4</b><span>ControlNet scene generation, exact paste-back, layer export, and all checks.</span></li>
+        <li><b>Days 5-6</b><span>Batch mode with a review queue, your target images, documentation, and handover.</span></li>
+      </ol>
+      <p class="price"><b>$850</b> in two milestones: $350 after days 1-2, $500 on delivery.</p>
+    </div>
+    <div>
+      <h2>What I'd need</h2>
+      <ul class="need">
+        <li>10-20 real part photos, including the hardest ones</li>
+        <li>The target images, and where each part should land</li>
+        <li>Your file format for layers: PNGs, layered TIFF, or PSD</li>
+      </ul>
+      <div class="q"><p>Does "exact overlay" mean the same pixel coordinates every time, or aligning the part to features in the target image?</p><small>The first is a fixed offset. The second adds a registration step, so it changes the build.</small></div>
+    </div>
+  </div>
+</section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

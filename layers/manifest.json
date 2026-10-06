@@ -1,0 +1,66 @@
+{
+ "canvas": [
+  1400,
+  1000
+ ],
+ "order": [
+  "05_background.png",
+  "04_shadow.png",
+  "01_part.png"
+ ],
+ "part_offset": [
+  380,
+  190
+ ],
+ "part_size": [
+  601,
+  601
+ ],
+ "source_bbox": [
+  300,
+  150,
+  601,
+  601
+ ],
+ "files": {
+  "01_part.png": {
+   "sha256_16": "f546e607d205d71e",
+   "shape": [
+    601,
+    601,
+    4
+   ]
+  },
+  "02_mask_binary.png": {
+   "sha256_16": "ee3dc46a2f0bc4d1",
+   "shape": [
+    601,
+    601
+   ]
+  },
+  "03_mask_edges.png": {
+   "sha256_16": "6eb179a863016661",
+   "shape": [
+    601,
+    601
+   ]
+  },
+  "04_shadow.png": {
+   "sha256_16": "8e2187135a197c45",
+   "shape": [
+    1000,
+    1400,
+    4
+   ]
+  },
+  "05_background.png": {
+   "sha256_16": "c99317126cb1cd67",
+   "shape": [
+    1000,
+    1400,
+    3
+   ]
+  }
+ },
+ "composite_sha256_16": "91cfccb5ec584637"
+}
